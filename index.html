@@ -550,10 +550,13 @@
     (() => {
       "use strict";
 
-      const MESSAGE_KEY = "simple_chat_messages_v1";
+      const SUPABASE_URL = "https://hbyhiyldaibwvbtdvoji.supabase.co";
+      const SUPABASE_KEY = "sb_publishable_ZPU9WJH4PpO0n4kyRi1eYQ_G9lkUBSG";
+      const TABLE_NAME = "chat_messages";
       const PROFILE_KEY = "simple_chat_profile_v1";
       const MAX_MESSAGES = 100;
       const MAX_IMAGES = 6;
+      const SYNC_INTERVAL = 4000;
 
       const messagesElement = document.getElementById("messages");
       const messageInput = document.getElementById("messageInput");
@@ -575,14 +578,16 @@
       const closeViewer = document.getElementById("closeViewer");
       const toast = document.getElementById("toast");
 
-      let profile = readJSON(sessionStorage, PROFILE_KEY);
-      let messages = readJSON(localStorage, MESSAGE_KEY) || [];
+      let profile = readJSON(localStorage, PROFILE_KEY) || readJSON(sessionStorage, PROFILE_KEY);
+      let messages = [];
       let pendingImages = [];
       let toastTimer;
       let sending = false;
+      let loadingMessages = false;
+      let cloudErrorShown = false;
 
       const channel = "BroadcastChannel" in window
-        ? new BroadcastChannel("simple_local_chat")
+        ? new BroadcastChannel("simple_cloud_chat")
         : null;
 
       function readJSON(storage, key) {
@@ -610,13 +615,66 @@
         }, 2400);
       }
 
-      function saveMessages() {
-        try {
-          localStorage.setItem(MESSAGE_KEY, JSON.stringify(messages));
+      async function cloudRequest(method, query = "", body) {
+        const options = {
+          method,
+          headers: {
+            apikey: SUPABASE_KEY,
+            Accept: "application/json",
+            "Content-Type": "application/json"
+          }
+        };
+        if (body !== undefined) options.body = JSON.stringify(body);
+
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/${TABLE_NAME}${query}`, options);
+        if (!response.ok) {
+          const detail = await response.text();
+          throw new Error(detail || `HTTP ${response.status}`);
+        }
+        if (response.status === 204) return null;
+        const text = await response.text();
+        return text ? JSON.parse(text) : null;
+      }
+
+      function mergeMessage(row) {
+        if (!row || !row.id) return false;
+        const incoming = { ...row, createdAt: Number(row.createdAt) };
+        if (!Number.isFinite(incoming.createdAt)) return false;
+
+        const index = messages.findIndex((item) => item.id === incoming.id);
+        if (index >= 0) {
+          if (messages[index].recalled === incoming.recalled) return false;
+          messages[index] = { ...messages[index], ...incoming };
           return true;
-        } catch {
-          showToast("浏览器存储空间不足，可以清理一些旧聊天记录");
-          return false;
+        }
+
+        messages.push(incoming);
+        messages.sort((a, b) => a.createdAt - b.createdAt);
+        if (messages.length > MAX_MESSAGES) {
+          messages = messages.slice(-MAX_MESSAGES);
+        }
+        return true;
+      }
+
+      async function loadMessages() {
+        if (loadingMessages) return;
+        loadingMessages = true;
+        try {
+          const data = await cloudRequest("GET", `?select=*&order=createdAt.desc&limit=${MAX_MESSAGES}`);
+          let changed = false;
+          for (const row of (data || []).reverse()) {
+            if (mergeMessage(row)) changed = true;
+          }
+          if (changed) renderMessages();
+          cloudErrorShown = false;
+        } catch (error) {
+          console.error("云端同步失败", error);
+          if (!cloudErrorShown) {
+            showToast("云端连接失败，请检查网络或数据库设置");
+            cloudErrorShown = true;
+          }
+        } finally {
+          loadingMessages = false;
         }
       }
 
@@ -744,17 +802,22 @@
         }
       }
 
-      function recallMessage(id) {
+      async function recallMessage(id) {
         const message = messages.find((item) => item.id === id);
         if (!message || !profile || message.userId !== profile.id || message.recalled) return;
         if (!window.confirm("撤回这条消息？")) return;
 
-        message.recalled = true;
-        delete message.text;
-        delete message.image;
-        saveMessages();
-        renderMessages();
-        notifyOtherTabs();
+        try {
+          await cloudRequest("PATCH", `?id=eq.${encodeURIComponent(id)}`, { recalled: true });
+          message.recalled = true;
+          delete message.text;
+          delete message.image;
+          renderMessages();
+          notifyOtherTabs();
+        } catch (error) {
+          console.error("撤回失败", error);
+          showToast("撤回失败，请检查网络后重试");
+        }
       }
 
       function newTextMessage(text) {
@@ -790,7 +853,7 @@
         messageInput.style.height = `${Math.min(messageInput.scrollHeight, 120)}px`;
       }
 
-      function sendMessages() {
+      async function sendMessages() {
         const text = messageInput.value.trim();
         if (!profile) {
           openProfileDialog(false);
@@ -798,25 +861,32 @@
         }
         if (sending || (!text && pendingImages.length === 0)) return;
 
-        sending = true;
-        if (text) messages.push(newTextMessage(text));
+        const outgoing = [];
+        if (text) outgoing.push(newTextMessage(text));
         for (const image of pendingImages) {
-          messages.push(newImageMessage(image));
-        }
-        if (messages.length > MAX_MESSAGES) {
-          messages = messages.slice(-MAX_MESSAGES);
+          outgoing.push(newImageMessage(image));
         }
 
-        messageInput.value = "";
-        pendingImages = [];
-        resizeInput();
-        renderPreviews();
-        saveMessages();
-        renderMessages(true);
-        notifyOtherTabs();
-        sending = false;
+        sending = true;
         updateSendButton();
-        messageInput.focus();
+        try {
+          await cloudRequest("POST", "", outgoing);
+          for (const message of outgoing) mergeMessage(message);
+
+          messageInput.value = "";
+          pendingImages = [];
+          resizeInput();
+          renderPreviews();
+          renderMessages(true);
+          notifyOtherTabs();
+        } catch (error) {
+          console.error("发送失败", error);
+          showToast("发送失败，请检查网络或数据库设置");
+        } finally {
+          sending = false;
+          updateSendButton();
+          messageInput.focus();
+        }
       }
 
       function renderPreviews() {
@@ -861,7 +931,7 @@
           element.src = source;
         });
 
-        const maxSize = 1280;
+        const maxSize = 960;
         const scale = Math.min(1, maxSize / Math.max(image.naturalWidth, image.naturalHeight));
         const canvas = document.createElement("canvas");
         canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
@@ -870,7 +940,7 @@
         context.fillStyle = "#fff";
         context.fillRect(0, 0, canvas.width, canvas.height);
         context.drawImage(image, 0, 0, canvas.width, canvas.height);
-        return canvas.toDataURL("image/jpeg", 0.85);
+        return canvas.toDataURL("image/jpeg", 0.8);
       }
 
       async function selectImages() {
@@ -937,7 +1007,8 @@
         else profile.name = name;
 
         try {
-          sessionStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+          localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+          sessionStorage.removeItem(PROFILE_KEY);
         } catch {
           showToast("当前浏览器无法记住名字");
         }
@@ -972,19 +1043,17 @@
         }
       });
 
-      window.addEventListener("storage", (event) => {
-        if (event.key === MESSAGE_KEY) {
-          messages = readJSON(localStorage, MESSAGE_KEY) || [];
-          renderMessages();
-        }
-      });
-
       if (channel) {
-        channel.addEventListener("message", () => {
-          messages = readJSON(localStorage, MESSAGE_KEY) || [];
-          renderMessages();
-        });
+        channel.addEventListener("message", loadMessages);
       }
+
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") loadMessages();
+      });
+      window.addEventListener("focus", loadMessages);
+      setInterval(() => {
+        if (document.visibilityState === "visible") loadMessages();
+      }, SYNC_INTERVAL);
 
       if (profile) {
         currentName.textContent = profile.name;
@@ -993,6 +1062,7 @@
       }
       renderMessages(true);
       updateSendButton();
+      loadMessages();
     })();
   </script>
 </body>
