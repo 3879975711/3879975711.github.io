@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MC 启动器 - 下载</title>
+<meta name="description" content="一个轻量的 Minecraft 启动器，支持版本下载、启动游戏和微软正版登录。">
+<style>
+:root{--bg:#f5f4f0;--panel:#fff;--line:#ddd9d0;--text:#232220;--dim:#84817a;--accent:#4a7045}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.75 "Segoe UI","Microsoft YaHei",system-ui,sans-serif}
+.wrap{max-width:760px;margin:0 auto;padding:56px 24px 40px}
+h1{font-size:26px;margin:0 0 6px;font-weight:600}
+.sub{color:var(--dim);margin:0 0 34px}
+.card{background:var(--panel);border:1px solid var(--line);padding:26px 28px;margin-bottom:16px}
+.card h2{font-size:15px;margin:0 0 12px;font-weight:600}
+ul{margin:0;padding-left:18px}
+li{margin:4px 0}
+a.btn{display:inline-block;background:var(--accent);color:#fff;text-decoration:none;
+  padding:9px 26px;border-radius:2px;margin:4px 0 12px}
+a.btn:hover{background:#3d5d39}
+a.ghost{color:var(--text);text-decoration:none;border-bottom:1px solid var(--line);margin-left:14px}
+a.ghost:hover{border-color:var(--dim)}
+.note{color:var(--dim);font-size:12px;margin:10px 0 0}
+code{background:#f0eee8;padding:1px 5px;font-family:Consolas,"Courier New",monospace;font-size:12px}
+.small{color:var(--dim);font-size:12px}
+footer{margin-top:26px;color:var(--dim);font-size:12px;border-top:1px solid var(--line);padding-top:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>MC 启动器</h1>
+  <p class="sub">Windows 下的 Minecraft 启动器。双击运行，自动打开浏览器操作。</p>
+
+  <div class="card">
+    <h2>下载</h2>
+    <a class="btn" href="MCLauncher.exe" download>下载启动器（58 KB）</a>
+    <a class="ghost" href="#how">使用方法</a>
+    <p class="note">单个 exe 文件，不需要安装。Windows 10 / 11 自带运行环境。</p>
+  </div>
+
+  <div class="card">
+    <h2>功能</h2>
+    <ul>
+      <li>下载任意版本的 Minecraft，包括正式版和快照：客户端、依赖库、资源文件</li>
+      <li>一键启动游戏，自动匹配所需 Java，缺失时可以自动下载</li>
+      <li>微软账号正版登录，登录一次后自动保持</li>
+      <li>没登录也能用离线模式，自己填写玩家名</li>
+      <li>国内默认走 BMCLAPI 镜像，也可以切换 Mojang 官方源</li>
+    </ul>
+  </div>
+
+  <div class="card" id="how">
+    <h2>使用方法</h2>
+    <ul>
+      <li>双击 <code>MCLauncher.exe</code>，程序在后台运行并打开浏览器</li>
+      <li>左侧选择版本，点“下载并安装”，等待下载完成</li>
+      <li>点“启动游戏”。需要正版时点右上角“登录微软账号”</li>
+      <li>游戏数据、配置、Java 都保存在启动器所在目录（.minecraft 文件夹）</li>
+      <li>关闭页面不会退出程序；要退出请点页面底部的“退出启动器”</li>
+    </ul>
+    <p class="note">如果浏览器没有自动打开，手动访问 <code>http://127.0.0.1:4434</code></p>
+  </div>
+
+  <div class="card">
+    <h2>说明</h2>
+    <ul>
+      <li>只监听本机 127.0.0.1，外部设备无法访问</li>
+      <li>正版登录需要该微软账号已拥有 Minecraft，登录信息由微软官方接口处理</li>
+      <li>内存占用约 40 MB，程序体积 58 KB，不会在后台常驻其他进程</li>
+    </ul>
+  </div>
+
+  <footer>
+    需要 Java 运行游戏。没有 Java 时，在设置里点“下载 Java”即可。端口固定 4434，被占用时程序会提示。
+  </footer>
+</div>
+</body>
+</html>
